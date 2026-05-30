@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Преподаватели{% endblock %}
+{% block content %}
+<div class="card">
+    <h1>Учетные записи преподавателей</h1>
+    <a href="{% url 'teacher_create' %}" class="btn">+ Создать преподавателя</a>
+</div>
+<div class="card">
+    {% if teachers %}
+        <table>
+            <thead><tr><th>ФИО</th><th>Логин</th><th>Email</th><th>Активен</th><th></th></tr></thead>
+            <tbody>
+            {% for t in teachers %}
+                <tr>
+                    <td>{{ t.display_name }}</td><td>{{ t.username }}</td><td>{{ t.email }}</td>
+                    <td>{% if t.is_active %}да{% else %}нет{% endif %}</td>
+                    <td><a href="{% url 'teacher_edit' t.pk %}" class="btn small">Редактировать</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}<p class="muted">Преподаватели не созданы.</p>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ olympiad.title }}{% endblock %}
+{% block content %}
+<div class="card">
+    <h1>{{ olympiad.title }} <span class="muted">({{ olympiad.year }})</span></h1>
+    {% if olympiad.description %}<p>{{ olympiad.description }}</p>{% endif %}
+    <table>
+        <tr><th>Уровень</th><td>{{ olympiad.level|default:"—" }}</td></tr>
+        <tr><th>Место проведения</th><td>{{ olympiad.location|default:"—" }}</td></tr>
+        <tr><th>Даты</th><td>{{ olympiad.start_date|default:"—" }} — {{ olympiad.end_date|default:"—" }}</td></tr>
+        <tr><th>Дедлайн регистрации</th><td>{{ olympiad.registration_deadline|default:"—" }}</td></tr>
+        <tr><th>Ответственный преподаватель</th><td>{% if olympiad.responsible_teacher %}{{ olympiad.responsible_teacher.display_name }}{% else %}—{% endif %}</td></tr>
+        <tr><th>Положение</th><td>{% if olympiad.regulation_file %}<a href="{{ olympiad.regulation_file.url }}">Скачать</a>{% else %}—{% endif %}</td></tr>
+        <tr><th>Задания прошлых лет</th><td>{% if olympiad.tasks_file %}<a href="{{ olympiad.tasks_file.url }}">Скачать</a>{% else %}—{% endif %}</td></tr>
+    </table>
+
+    {% if user.is_authenticated and user.is_student %}
+        {% if is_registered %}
+            <p class="badge published">Вы записаны на эту олимпиаду</p>
+        {% else %}
+            <form method="post" action="{% url 'register_for_olympiad' olympiad.pk %}">{% csrf_token %}
+                <button class="btn success" type="submit">Записаться на олимпиаду</button>
+            </form>
+        {% endif %}
+    {% elif not user.is_authenticated %}
+        <p class="muted"><a href="{% url 'login' %}">Войдите</a>, чтобы записаться на олимпиаду.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Протокол победителей</h2>
+    {% if protocol %}
+        <table>
+            <thead><tr><th>Место</th><th>Студент</th><th>Баллы</th><th>Результат</th></tr></thead>
+            <tbody>
+            {% for r in results %}
+                <tr><td>{{ r.place|default:"—" }}</td><td>{{ r.student.display_name }}</td><td>{{ r.score }}</td><td>{{ r.get_result_type_display }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">Протокол ещё не опубликован.</p>
+    {% endif %}
+</div>
+{% endblock %}
