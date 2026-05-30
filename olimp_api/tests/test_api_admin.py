@@ -1,53 +1,37 @@
-def test_create_teacher(client, admin_headers):
-    """Тест создания преподавателя администратором"""
-    response = client.post("/api/admin/teachers", json={
-        "user": {
-            "email": "new_teacher@example.com",
-            "username": "new_teacher",
-            "password": "teacher123",
-            "full_name": "Новый Преподаватель",
-            "role": "teacher"
-        },
-        "department": "Тестовый факультет",
+def test_create_teacher_and_olympiad(client, admin_headers):
+    """Администратор создает преподавателя и олимпиаду."""
+    resp = client.post("/api/admin/teachers", headers=admin_headers, json={
+        "email": "teacher_a@example.com",
+        "username": "teacher_a",
+        "password": "pass123",
+        "full_name": "Преподаватель А",
+        "department": "ИТ",
         "position": "Доцент",
-        "academic_degree": "Кандидат наук"
-    }, headers=admin_headers)
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["user"]["username"] == "new_teacher"
-    assert data["department"] == "Тестовый факультет"
+    })
+    assert resp.status_code == 200, resp.text
+    teacher_id = resp.json()["id"]
 
-def test_get_teachers(client, admin_headers):
-    """Тест получения списка преподавателей"""
-    response = client.get("/api/admin/teachers", headers=admin_headers)
-    
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    resp = client.post("/api/admin/olympiads", headers=admin_headers, json={
+        "title": "Олимпиада по программированию",
+        "description": "Тест",
+        "year": 2025,
+        "start_date": "2025-03-01",
+        "end_date": "2025-03-02",
+        "level": "Городская",
+        "teacher_id": teacher_id,
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["title"] == "Олимпиада по программированию"
 
-def test_create_olympiad_as_admin(client, admin_headers):
-    """Тест создания олимпиады администратором"""
-    response = client.post("/api/admin/olympiads", json={
-        "title": "Админская Олимпиада",
-        "description": "Создана администратором",
-        "year": 2024,
-        "start_date": "2024-12-20",
-        "end_date": "2024-12-21",
-        "registration_deadline": "2024-12-10",
-        "location": "Тестовый город",
-        "level": "всероссийская",
-        "status": "planned",
-        "teacher_id": 1
-    }, headers=admin_headers)
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["title"] == "Админская Олимпиада"
-    assert data["creator_id"] is not None
 
-def test_get_protocols_as_admin(client, admin_headers):
-    """Тест получения протоколов администратором"""
-    response = client.get("/api/admin/protocols", headers=admin_headers)
-    
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+def test_admin_endpoint_requires_auth(client):
+    """Эндпоинт администратора без токена -> 401."""
+    resp = client.get("/api/admin/protocols")
+    assert resp.status_code == 401
+
+
+def test_admin_list_protocols(client, admin_headers):
+    """Администратор видит список протоколов."""
+    resp = client.get("/api/admin/protocols", headers=admin_headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)

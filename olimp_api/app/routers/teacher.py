@@ -1,135 +1,72 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
-import shutil
-import os
 
-from app import schemas, models
 from app.db.database import get_db
 from app.dependencies.auth import get_current_teacher
-from app.utils.config import settings
+from app.models.user import User
+from app.schemas.user import StudentCreate, StudentResponseFull
+from app.schemas.protocol import (
+    ProtocolCreate,
+    ProtocolResponse,
+    ProtocolResultCreate,
+    ProtocolResultResponse,
+    ProtocolStatusUpdate,
+)
+from app.controllers import student as controller_student
+from app.controllers import olympiad as controller_olympiad
+from app.controllers import protocol as controller_protocol
 
-router = APIRouter(tags=["teacher"])
+router = APIRouter(prefix="/api/teacher", tags=["Преподаватель"])
 
-@router.post("/students")
+
+@router.post("/students", response_model=StudentResponseFull)
 def create_student(
-    student_data: schemas.StudentCreate,
-    current_user: models.User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
+    student_data: StudentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_teacher),
 ):
-    """Создание учетной записи студента"""
-    # Создаем пользователя студента
-    from app.utils.security import get_password_hash
-    
-    user_data = student_data.user
-    db_user = models.User(
-        email=user_data.email,
-        username=user_data.username,
-        hashed_password=get_password_hash(user_data.password),
-        full_name=user_data.full_name,
-        role=models.UserRole.STUDENT,
-        is_active=True
-    )
-    
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    
-    # Создаем профиль студента
-    student = models.Student(
-        user_id=db_user.id,
-        birth_date=student_data.birth_date,
-        phone=student_data.phone,
-        institution=student_data.institution,
-        education_level=student_data.education_level,
-        course=student_data.course,
-        specialty=student_data.specialty
-    )
-    
-    db.add(student)
-    db.commit()
-    
-    return {"message": "Студент создан", "student_id": student.id}
+    """Создание учетной записи студента."""
+    return controller_student.create_student(db, student_data)
+
 
 @router.post("/olympiads/{olympiad_id}/regulation")
-async def upload_regulation(
+def upload_regulation(
     olympiad_id: int,
     file: UploadFile = File(...),
-    current_user: models.User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_teacher),
 ):
-    """Загрузка положения об олимпиаде"""
-    olympiad = db.query(models.Olympiad).filter(models.Olympiad.id == olympiad_id).first()
-    if not olympiad:
-        raise HTTPException(status_code=404, detail="Олимпиада не найдена")
-    
-    # Сохраняем файл
-    file_path = os.path.join(settings.REGULATIONS_FOLDER, f"regulation_{olympiad_id}_{file.filename}")
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Обновляем запись в БД
-    olympiad.regulation_file = file_path
-    db.commit()
-    
-    return {"message": "Положение загружено", "file_path": file_path}
+    """Загрузка положения по олимпиаде."""
+    return controller_olympiad.upload_regulation(db, olympiad_id, file)
 
-@router.post("/protocols")
+
+@router.post("/protocols", response_model=ProtocolResponse)
 def create_protocol(
-    protocol_data: schemas.ProtocolCreate,
-    current_user: models.User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
+    protocol_data: ProtocolCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_teacher),
 ):
-    """Создание протокола олимпиады"""
-    protocol = models.Protocol(
-        olympiad_id=protocol_data.olympiad_id,
-        teacher_id=current_user.teacher_profile.id,
-        status=protocol_data.status
-    )
-    
-    db.add(protocol)
-    db.commit()
-    
-    return {"message": "Протокол создан", "protocol_id": protocol.id}
+    """Создание протокола."""
+    return controller_protocol.create_protocol(db, current_user.id, protocol_data)
 
-@router.post("/protocols/{protocol_id}/results")
-def add_protocol_result(
+
+@router.post("/protocols/{protocol_id}/results", response_model=ProtocolResultResponse)
+def add_result(
     protocol_id: int,
-    result_data: schemas.ProtocolResultBase,
-    current_user: models.User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
+    result_data: ProtocolResultCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_teacher),
 ):
-    """Добавление результата в протокол"""
-    protocol = db.query(models.Protocol).filter(models.Protocol.id == protocol_id).first()
-    if not protocol:
-        raise HTTPException(status_code=404, detail="Протокол не найден")
-    
-    result = models.ProtocolResult(
-        protocol_id=protocol_id,
-        student_id=result_data.student_id,
-        score=result_data.score,
-        place=result_data.place,
-        result_type=result_data.result_type
-    )
-    
-    db.add(result)
-    db.commit()
-    
-    return {"message": "Результат добавлен", "result_id": result.id}
+    """Добавление результата в протокол."""
+    return controller_protocol.add_result(db, protocol_id, result_data)
 
-@router.put("/protocols/{protocol_id}/status")
+
+@router.put("/protocols/{protocol_id}/status", response_model=ProtocolResponse)
 def update_protocol_status(
     protocol_id: int,
-    status_data: dict,
-    current_user: models.User = Depends(get_current_teacher),
-    db: Session = Depends(get_db)
+    status_data: ProtocolStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_teacher),
 ):
-    """Изменение статуса протокола"""
-    protocol = db.query(models.Protocol).filter(models.Protocol.id == protocol_id).first()
-    if not protocol:
-        raise HTTPException(status_code=404, detail="Протокол не найден")
-    
-    protocol.status = status_data.get("status", protocol.status)
-    db.commit()
-    
-    return {"message": "Статус протокола обновлен", "status": protocol.status}
+    """Изменение статуса протокола."""
+    return controller_protocol.update_status(db, protocol_id, status_data)

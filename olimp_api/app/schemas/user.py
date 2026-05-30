@@ -1,17 +1,21 @@
 from pydantic import BaseModel, EmailStr
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
+
 from app.models.user import UserRole
 
-# Базовые схемы
+
+# ---------- Пользователь ----------
 class UserBase(BaseModel):
     email: EmailStr
     username: str
     full_name: Optional[str] = None
     role: UserRole
 
+
 class UserCreate(UserBase):
     password: str
+
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -19,70 +23,93 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     password: Optional[str] = None
 
-class UserInDB(UserBase):
+
+class UserResponse(BaseModel):
     id: int
+    email: EmailStr
+    username: str
+    full_name: Optional[str] = None
+    role: UserRole
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
 
-# Схемы для студентов
-class StudentBase(BaseModel):
-    birth_date: Optional[date] = None
-    phone: Optional[str] = None
-    institution: str
-    education_level: str
-    course: int
-    specialty: str
-
-class StudentCreate(StudentBase):
-    user: UserCreate
-
-class StudentResponse(StudentBase):
-    id: int
-    user: UserInDB
-    
-    class Config:
-        from_attributes = True
-
-# Схемы для преподавателей
-class TeacherBase(BaseModel):
-    department: str
-    position: str
-    academic_degree: Optional[str] = None
-
-class TeacherCreate(TeacherBase):
-    user: UserCreate
-
-class TeacherResponse(TeacherBase):
-    id: int
-    user: UserInDB
-    
     class Config:
         from_attributes = True
 
 
-class UserRegister(BaseModel):
+class Token(BaseModel):
+    """Ответ при входе/регистрации с access-токеном."""
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    username: str
+    role: str
+
+
+# ---------- Студент ----------
+class StudentCreate(BaseModel):
+    """Создание учетной записи студента (преподавателем)."""
     email: EmailStr
     username: str
     password: str
-    full_name: str
-    role: UserRole
-    # Поля для студента (если role == STUDENT)
+    full_name: Optional[str] = None
     birth_date: Optional[date] = None
     phone: Optional[str] = None
     institution: Optional[str] = None
     education_level: Optional[str] = None
     course: Optional[int] = None
     specialty: Optional[str] = None
-    # Поля для преподавателя (если role == TEACHER)
+
+
+class StudentProfileUpdate(BaseModel):
+    """Редактирование профиля студента."""
+    birth_date: Optional[date] = None
+    phone: Optional[str] = None
+    institution: Optional[str] = None
+    education_level: Optional[str] = None
+    course: Optional[int] = None
+    specialty: Optional[str] = None
+
+
+class StudentResponse(BaseModel):
+    id: int
+    user_id: int
+    birth_date: Optional[date] = None
+    phone: Optional[str] = None
+    institution: Optional[str] = None
+    education_level: Optional[str] = None
+    course: Optional[int] = None
+    specialty: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class StudentResponseFull(BaseModel):
+    id: int
+    user_id: int
+    full_name: Optional[str] = None
+    username: str
+    email: EmailStr
+
+
+# ---------- Преподаватель ----------
+class TeacherCreate(BaseModel):
+    """Создание учетной записи преподавателя (администратором)."""
+    email: EmailStr
+    username: str
+    password: str
+    full_name: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
     academic_degree: Optional[str] = None
 
-    
-class UserLogin(BaseModel):
-    username: str
-    password: str
+
+class TeacherResponse(BaseModel):
+    id: int
+    user_id: int
+    department: Optional[str] = None
+    position: Optional[str] = None
+    academic_degree: Optional[str] = None
+
+    class Config:
+        from_attributes = True

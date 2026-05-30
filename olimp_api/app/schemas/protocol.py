@@ -1,37 +1,42 @@
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional
 
-class ProtocolBase(BaseModel):
+
+class ProtocolCreate(BaseModel):
     olympiad_id: int
-    status: str = "draft"  # draft, prepared, published
 
-class ProtocolCreate(ProtocolBase):
-    teacher_id: int
 
-class ProtocolUpdate(BaseModel):
-    status: Optional[str] = None
+class ProtocolResponse(BaseModel):
+    id: int
+    olympiad_id: int
+    teacher_id: Optional[int] = None
+    status: str
     file_path: Optional[str] = None
 
-class ProtocolResponse(ProtocolBase):
-    id: int
-    teacher_id: Optional[int]
-    file_path: Optional[str]
-    created_at: datetime
-    
     class Config:
         from_attributes = True
 
-class ProtocolResultBase(BaseModel):
+
+class ProtocolStatusUpdate(BaseModel):
+    # Допустимые статусы: draft (формируется), prepared (подготовлен), published (опубликован)
+    status: str
+
+
+class ProtocolResultCreate(BaseModel):
     student_id: int
     score: float
     place: Optional[int] = None
-    result_type: str  # winner, prize_winner, participant
+    # Тип результата: winner (победитель), prize_winner (призер), participant (участник)
+    result_type: str
 
-class ProtocolResultResponse(ProtocolResultBase):
+
+class ProtocolResultResponse(BaseModel):
     id: int
     protocol_id: int
-    created_at: datetime
-    
+    student_id: int
+    score: Optional[float] = None
+    place: Optional[int] = None
+    result_type: Optional[str] = None
+
     class Config:
         from_attributes = True

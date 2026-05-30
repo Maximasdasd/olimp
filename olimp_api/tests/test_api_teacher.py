@@ -1,58 +1,55 @@
 import pytest
+from tests.helpers import login
+
 
 @pytest.fixture
-def teacher_token(client):
-    """Создаем и получаем токен преподавателя"""
-    # Создаем преподавателя через админа
-    admin_response = client.post("/api/auth/login", json={
-        "username": "test_admin",
-        "password": "test123"
-    })
-    admin_token = admin_response.json()["access_token"]
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
-    
-    # Создаем преподавателя
-    client.post("/api/admin/teachers", json={
-        "user": {
-            "email": "test_teacher@example.com",
-            "username": "test_teacher",
-            "password": "teacher123",
-            "full_name": "Тестовый Преподаватель",
-            "role": "teacher"
-        },
-        "department": "Тестовый",
+def teacher_headers(client, admin_headers):
+    """Создаем преподавателя через админа и входим под ним."""
+    client.post("/api/admin/teachers", headers=admin_headers, json={
+        "email": "teacher_b@example.com",
+        "username": "teacher_b",
+        "password": "pass123",
+        "full_name": "Преподаватель Б",
+        "department": "ИТ",
         "position": "Преподаватель",
-        "academic_degree": ""
-    }, headers=admin_headers)
-    
-    # Логинимся как преподаватель
-    response = client.post("/api/auth/login", json={
-        "username": "test_teacher",
-        "password": "teacher123"
     })
-    return response.json()["access_token"]
+    token = login(client, "teacher_b", "pass123")
+    return {"Authorization": f"Bearer {token}"}
 
-@pytest.fixture
-def teacher_headers(teacher_token):
-    return {"Authorization": f"Bearer {teacher_token}"}
 
-def test_create_student_as_teacher(client, teacher_headers):
-    """Тест создания студента преподавателем"""
-    response = client.post("/api/teacher/students", json={
-        "user": {
-            "email": "teacher_created@example.com",
-            "username": "teacher_student",
-            "password": "student123",
-            "full_name": "Студент от преподавателя",
-            "role": "student"
-        },
-        "birth_date": "2000-01-01",
-        "phone": "+79001234567",
-        "institution": "Тестовый университет",
-        "education_level": "бакалавриат",
+def test_teacher_create_student(client, teacher_headers):
+    """Преподаватель создает учетную запись студента."""
+    resp = client.post("/api/teacher/students", headers=teacher_headers, json={
+        "email": "student_b@example.com",
+        "username": "student_b",
+        "password": "pass123",
+        "full_name": "Студент Б",
+        "institution": "ЕМК",
+        "education_level": "СПО",
         "course": 3,
-        "specialty": "тестирование"
-    }, headers=teacher_headers)
-    
-    assert response.status_code == 200
-    assert "student_id" in response.json()
+        "specialty": "Информационные системы",
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["username"] == "student_b"
+
+
+def test_teacher_create_protocol(client, admin_headers, teacher_headers):
+    """Преподаватель создает протокол для олимпиады."""
+    olymp = client.post("/api/admin/olympiads", headers=admin_headers, json={
+        "title": "Олимпиада для протокола",
+        "year": 2025,
+        "start_date": "2025-04-01",
+        "end_date": "2025-04-02",
+        "level": "Региональная",
+    }).json()
+
+    resp = client.post("/api/teacher/protocols", headers=teacher_headers, json={
+        "olympiad_id": olymp["id"],
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "draft"
+
+
+def test_teacher_endpoint_requires_auth(client):
+    resp = client.post("/api/teacher/protocols", json={"olympiad_id": 1})
+    assert resp.status_code == 401

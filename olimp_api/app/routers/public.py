@@ -1,63 +1,44 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app import schemas
 from app.db.database import get_db
-from app import models
+from app.schemas.olympiad import OlympiadResponse
+from app.schemas.protocol import ProtocolResponse
+from app.controllers import olympiad as controller_olympiad
+from app.controllers import protocol as controller_protocol
 
-router = APIRouter(tags=["public"])
+router = APIRouter(prefix="/api", tags=["Публичные"])
 
-@router.get("/olympiads", response_model=List[schemas.OlympiadPublic])
+
+@router.get("/olympiads", response_model=List[OlympiadResponse])
 def get_olympiads(
-    skip: int = 0,
-    limit: int = 100,
-    year: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
+    year: Optional[int] = Query(None, description="Фильтр по году"),
+    db: Session = Depends(get_db),
 ):
-    """Получение списка всех олимпиад (доступно без авторизации)"""
-    query = db.query(models.Olympiad).filter(models.Olympiad.is_protocol_published == True)
-    
-    if year:
-        query = query.filter(models.Olympiad.year == year)
-    
-    olympiads = query.offset(skip).limit(limit).all()
-    return olympiads
+    """Просмотр списка всех олимпиад (доступно всем)."""
+    return controller_olympiad.get_olympiads(db, year=year)
 
-@router.get("/olympiads/{olympiad_id}", response_model=schemas.OlympiadPublic)
+
+@router.get("/olympiads/{olympiad_id}", response_model=OlympiadResponse)
 def get_olympiad(olympiad_id: int, db: Session = Depends(get_db)):
-    """Получение информации об олимпиаде"""
-    olympiad = db.query(models.Olympiad).filter(
-        models.Olympiad.id == olympiad_id,
-        models.Olympiad.is_protocol_published == True
-    ).first()
-    
-    if not olympiad:
-        raise HTTPException(status_code=404, detail="Олимпиада не найдена или не опубликована")
-    
-    return olympiad
+    """Просмотр информации об олимпиаде."""
+    return controller_olympiad.get_olympiad(db, olympiad_id)
 
-@router.get("/olympiads/{olympiad_id}/protocol")
-def get_protocol(olympiad_id: int, db: Session = Depends(get_db)):
-    """Получение протокола олимпиады"""
-    olympiad = db.query(models.Olympiad).filter(
-        models.Olympiad.id == olympiad_id,
-        models.Olympiad.is_protocol_published == True
-    ).first()
-    
-    if not olympiad or not olympiad.protocol:
-        raise HTTPException(status_code=404, detail="Протокол не найден или не опубликован")
-    
-    return {
-        "message": "Протокол олимпиады", 
-        "file_path": olympiad.protocol.file_path,
-        "olympiad_title": olympiad.title,
-        "year": olympiad.year
-    }
+
+@router.get("/olympiads/{olympiad_id}/protocol", response_model=ProtocolResponse)
+def get_olympiad_protocol(olympiad_id: int, db: Session = Depends(get_db)):
+    """Просмотр протокола победителей (только опубликованные)."""
+    return controller_protocol.get_published_protocol(db, olympiad_id)
+
 
 @router.get("/olympiads/{olympiad_id}/tasks")
-def get_tasks(olympiad_id: int, db: Session = Depends(get_db)):
-    """Получение заданий прошлых лет"""
-    tasks = db.query(models.Task).filter(models.Task.olympiad_id == olympiad_id).all()
-    return tasks
+def get_olympiad_tasks(olympiad_id: int, db: Session = Depends(get_db)):
+    """Просмотр заданий прошлых лет."""
+    return controller_olympiad.get_tasks(db, olympiad_id)
 
+
+@router.get("/olympiads/{olympiad_id}/regulation")
+def get_regulation(olympiad_id: int, db: Session = Depends(get_db)):
+    """Просмотр положения по олимпиаде."""
+    return controller_olympiad.get_regulation(db, olympiad_id)
