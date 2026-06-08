@@ -1,0 +1,36 @@
+{% extends "core/base.html" %}
+{% block title %}Мой профиль{% endblock %}
+{% block content %}
+<div class="card">
+    <h1>Мой профиль</h1>
+    <p class="muted">{{ current_user.username }}</p>
+</div>
+
+<div class="card">
+    <h2>Мои олимпиады</h2>
+    {% if registrations %}
+        <table>
+            <thead><tr><th>Олимпиада (ID)</th><th>Статус</th><th>Дата записи</th></tr></thead>
+            <tbody>
+            {% for reg in registrations %}
+                <tr><td>{{ reg.olympiad_id }}</td><td>{{ reg.status }}</td><td>{{ reg.registration_date }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}<p class="muted">Вы пока не записаны ни на одну олимпиаду.</p>{% endif %}
+</div>
+
+<div class="card">
+    <h2>Мои результаты</h2>
+    {% if results %}
+        <table>
+            <thead><tr><th>Протокол (ID)</th><th>Баллы</th><th>Место</th><th>Результат</th></tr></thead>
+            <tbody>
+            {% for r in results %}
+                <tr><td>{{ r.protocol_id }}</td><td>{{ r.score }}</td><td>{{ r.place|default:"—" }}</td><td>{{ r.result_type }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}<p class="muted">Результатов пока нет.</p>{% endif %}
+</div>
+{% endblock %}

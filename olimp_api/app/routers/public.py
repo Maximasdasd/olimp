@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from app.db.database import get_db
 from app.schemas.olympiad import OlympiadResponse
-from app.schemas.protocol import ProtocolResponse
+from app.schemas.protocol import ProtocolResponse, ProtocolResultResponse
 from app.controllers import olympiad as controller_olympiad
 from app.controllers import protocol as controller_protocol
 
@@ -30,6 +30,12 @@ def get_olympiad(olympiad_id: int, db: Session = Depends(get_db)):
 def get_olympiad_protocol(olympiad_id: int, db: Session = Depends(get_db)):
     """Просмотр протокола победителей (только опубликованные)."""
     return controller_protocol.get_published_protocol(db, olympiad_id)
+
+
+@router.get("/olympiads/{olympiad_id}/results", response_model=List[ProtocolResultResponse])
+def get_olympiad_results(olympiad_id: int, db: Session = Depends(get_db)):
+    """Список результатов (победителей) из опубликованного протокола."""
+    return controller_protocol.get_published_results(db, olympiad_id)
 
 
 @router.get("/olympiads/{olympiad_id}/tasks")

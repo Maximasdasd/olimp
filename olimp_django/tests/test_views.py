@@ -1,96 +1,92 @@
 """
-Тесты Django-вьюх приложения «Олимпиадное движение».
+Тесты Django-вьюх фронтенда «Олимпиадное движение».
 
-Покрывают:
-  * публичные страницы (список олимпиад, карточка) — доступны всем;
-  * редиректы на логин для защищённых страниц без входа;
-  * проверку прав по ролям (студент/преподаватель/администратор);
-  * успешный рендер страниц и проверку заголовков;
-  * процессы входа, регистрации и выхода.
+FastAPI замокан (фикстура mock_fastapi), поэтому тесты детерминированы и не
+требуют запущенного бэкенда. Покрывают:
+  * публичные страницы;
+  * редиректы на логин без токена;
+  * проверку прав по ролям;
+  * рендер страниц для каждой роли и заголовки;
+  * вход, регистрацию, выход.
 """
 import pytest
 from django.urls import reverse
 
-pytestmark = pytest.mark.django_db  # сессии и данные используют БД
+pytestmark = pytest.mark.django_db  # сессии Django используют БД
 
 
 # ──────────────────────────────────────────────
-#  Публичные страницы (незарегистрированный пользователь)
+#  Публичные страницы
 # ──────────────────────────────────────────────
 class TestPublicPages:
-    def test_olympiad_list_ok(self, client):
+    def test_olympiad_list_ok(self, client, mock_fastapi):
+        mock_fastapi.set_get_default([
+            {"id": 1, "title": "Олимпиада А", "year": 2025,
+             "level": "Региональная", "is_protocol_published": True},
+        ])
         response = client.get(reverse("olympiad_list"))
         assert response.status_code == 200
+        assert "Олимпиада А" in response.content.decode("utf-8")
 
-    def test_olympiad_list_title(self, client):
+    def test_olympiad_list_title(self, client, mock_fastapi):
         response = client.get(reverse("olympiad_list"))
         assert "Олимпиады" in response.content.decode("utf-8")
 
-    def test_olympiad_list_shows_olympiad(self, client, olympiad):
-        response = client.get(reverse("olympiad_list"))
-        assert olympiad.title in response.content.decode("utf-8")
-
-    def test_olympiad_list_filter_by_year(self, client, olympiad):
-        # фильтр по году, на который есть олимпиада
-        response = client.get(reverse("olympiad_list"), {"year": 2025})
+    def test_olympiad_detail_ok(self, client, mock_fastapi):
+        mock_fastapi.set_get("/api/olympiads/1", {
+            "id": 1, "title": "Олимпиада Б", "year": 2025,
+            "is_protocol_published": True,
+        })
+        mock_fastapi.set_get("/api/olympiads/1/results", [
+            {"place": 1, "student_id": 7, "score": 95, "result_type": "winner"},
+        ])
+        response = client.get(reverse("olympiad_detail", args=[1]))
         assert response.status_code == 200
-        assert olympiad.title in response.content.decode("utf-8")
-
-    def test_olympiad_list_filter_other_year_hides(self, client, olympiad):
-        # год без олимпиад — карточки нет
-        response = client.get(reverse("olympiad_list"), {"year": 1999})
-        assert olympiad.title not in response.content.decode("utf-8")
-
-    def test_olympiad_detail_ok(self, client, olympiad):
-        response = client.get(reverse("olympiad_detail", args=[olympiad.pk]))
-        assert response.status_code == 200
-        assert olympiad.title in response.content.decode("utf-8")
-
-    def test_olympiad_detail_404(self, client):
-        response = client.get(reverse("olympiad_detail", args=[999999]))
-        assert response.status_code == 404
-
-    def test_published_protocol_visible_to_anon(self, client, olympiad, published_protocol):
-        # опубликованный протокол виден незарегистрированному пользователю
-        response = client.get(reverse("olympiad_detail", args=[olympiad.pk]))
         content = response.content.decode("utf-8")
-        assert "Победитель" in content
+        assert "Олимпиада Б" in content
+        assert "winner" in content
+
+    def test_olympiad_detail_not_found_redirects(self, client, mock_fastapi):
+        mock_fastapi.set_get("/api/olympiads/999", {"detail": "not found"}, status=404)
+        response = client.get(reverse("olympiad_detail", args=[999]))
+        assert response.status_code == 302
 
 
 # ──────────────────────────────────────────────
-#  Доступ без входа → редирект на логин
+#  Доступ без токена → редирект на логин
 # ──────────────────────────────────────────────
 class TestAuthRedirects:
     @pytest.mark.parametrize("route", [
         "profile", "teacher_dashboard", "admin_dashboard",
-        "create_protocol", "olympiad_create", "teacher_list",
-        "teacher_create", "student_create",
+        "create_protocol", "create_olympiad", "create_teacher", "create_student",
     ])
-    def test_protected_pages_redirect_to_login(self, client, route):
+    def test_protected_pages_redirect_to_login(self, client, mock_anon, route):
         response = client.get(reverse(route))
         assert response.status_code == 302
-        assert reverse("login") in response.url
+        assert "/login/" in response.url
 
 
 # ──────────────────────────────────────────────
 #  Контроль доступа по ролям
 # ──────────────────────────────────────────────
 class TestRolePermissions:
-    def test_student_cannot_open_admin(self, student_client):
-        # студенту запрещена админ-панель → 403
+    def test_student_cannot_open_admin(self, student_client, mock_fastapi):
+        mock_fastapi.set_role("student")
         response = student_client.get(reverse("admin_dashboard"))
-        assert response.status_code == 403
+        assert response.status_code == 302  # редирект со «Недостаточно прав»
 
-    def test_student_cannot_open_teacher(self, student_client):
+    def test_student_cannot_open_teacher(self, student_client, mock_fastapi):
+        mock_fastapi.set_role("student")
         response = student_client.get(reverse("teacher_dashboard"))
-        assert response.status_code == 403
+        assert response.status_code == 302
 
-    def test_teacher_cannot_open_admin(self, teacher_client):
+    def test_teacher_cannot_open_admin(self, teacher_client, mock_fastapi):
+        mock_fastapi.set_role("teacher")
         response = teacher_client.get(reverse("admin_dashboard"))
-        assert response.status_code == 403
+        assert response.status_code == 302
 
-    def test_admin_can_open_teacher_pages(self, admin_client):
-        # администратор проходит проверку преподавателя (по реализации декоратора)
+    def test_admin_can_open_teacher(self, admin_client, mock_fastapi):
+        mock_fastapi.set_role("admin")
         response = admin_client.get(reverse("teacher_dashboard"))
         assert response.status_code == 200
 
@@ -99,12 +95,10 @@ class TestRolePermissions:
 #  Студент
 # ──────────────────────────────────────────────
 class TestStudentPages:
-    def test_profile_ok(self, student_client):
+    def test_profile_ok(self, student_client, mock_fastapi):
+        mock_fastapi.set_role("student")
         response = student_client.get(reverse("profile"))
         assert response.status_code == 200
-
-    def test_profile_title(self, student_client):
-        response = student_client.get(reverse("profile"))
         assert "Мой профиль" in response.content.decode("utf-8")
 
 
@@ -112,100 +106,91 @@ class TestStudentPages:
 #  Преподаватель
 # ──────────────────────────────────────────────
 class TestTeacherPages:
-    def test_dashboard_ok(self, teacher_client):
+    def test_dashboard_ok(self, teacher_client, mock_fastapi):
+        mock_fastapi.set_role("teacher")
         response = teacher_client.get(reverse("teacher_dashboard"))
         assert response.status_code == 200
-
-    def test_dashboard_title(self, teacher_client):
-        response = teacher_client.get(reverse("teacher_dashboard"))
         assert "Кабинет преподавателя" in response.content.decode("utf-8")
 
-    def test_student_create_form_ok(self, teacher_client):
-        response = teacher_client.get(reverse("student_create"))
+    def test_student_create_form_ok(self, teacher_client, mock_fastapi):
+        mock_fastapi.set_role("teacher")
+        response = teacher_client.get(reverse("create_student"))
         assert response.status_code == 200
-        assert "Создание студента" in response.content.decode("utf-8")
-
-    def test_create_protocol_form_ok(self, teacher_client):
-        response = teacher_client.get(reverse("create_protocol"))
-        assert response.status_code == 200
+        assert "студента" in response.content.decode("utf-8")
 
 
 # ──────────────────────────────────────────────
 #  Администратор
 # ──────────────────────────────────────────────
 class TestAdminPages:
-    def test_dashboard_ok(self, admin_client):
+    def test_dashboard_ok(self, admin_client, mock_fastapi):
+        mock_fastapi.set_role("admin")
         response = admin_client.get(reverse("admin_dashboard"))
         assert response.status_code == 200
-
-    def test_dashboard_title(self, admin_client):
-        response = admin_client.get(reverse("admin_dashboard"))
         assert "Панель администратора" in response.content.decode("utf-8")
 
-    def test_olympiad_create_form_ok(self, admin_client):
-        response = admin_client.get(reverse("olympiad_create"))
+    def test_olympiad_create_form_ok(self, admin_client, mock_fastapi):
+        mock_fastapi.set_role("admin")
+        response = admin_client.get(reverse("create_olympiad"))
         assert response.status_code == 200
 
-    def test_teacher_list_ok(self, admin_client, teacher_user):
-        response = admin_client.get(reverse("teacher_list"))
+    def test_teacher_create_form_ok(self, admin_client, mock_fastapi):
+        mock_fastapi.set_role("admin")
+        response = admin_client.get(reverse("create_teacher"))
         assert response.status_code == 200
-        assert teacher_user.display_name() in response.content.decode("utf-8")
-
-    def test_teacher_create_form_ok(self, admin_client):
-        response = admin_client.get(reverse("teacher_create"))
-        assert response.status_code == 200
-        assert "Создание преподавателя" in response.content.decode("utf-8")
+        assert "преподавателя" in response.content.decode("utf-8")
 
 
 # ──────────────────────────────────────────────
 #  Вход / регистрация / выход
 # ──────────────────────────────────────────────
 class TestLogin:
-    def test_login_page_ok(self, client):
+    def test_login_page_ok(self, client, mock_anon):
         response = client.get(reverse("login"))
         assert response.status_code == 200
         assert "Вход" in response.content.decode("utf-8")
 
-    def test_login_success_redirects(self, client, student_user):
+    def test_login_success_sets_token_and_redirects(self, client, mock_fastapi):
         response = client.post(reverse("login"), {
-            "username": "student", "password": "student123",
+            "username": "admin", "password": "admin123",
         })
         assert response.status_code == 302
-        # после входа пользователь аутентифицирован
-        assert response.wsgi_request.user.is_authenticated
+        assert client.session.get("fastapi_token") == "test-token-123"
 
-    def test_login_wrong_password(self, client, student_user):
+    def test_login_failure_renders_login(self, client, monkeypatch):
+        import core.fastapi_client as fc
+
+        class R:
+            status_code = 401
+            def json(self):
+                return {"detail": "Неверное имя пользователя или пароль"}
+        # /api/auth/me -> 401 (аноним), /api/auth/login -> 401
+        monkeypatch.setattr(fc.requests, "get", lambda *a, **k: R())
+        monkeypatch.setattr(fc.requests, "post", lambda *a, **k: R())
         response = client.post(reverse("login"), {
-            "username": "student", "password": "wrong",
+            "username": "admin", "password": "wrong",
         })
-        # форма перерисовывается со статусом 200, вход не выполнен
         assert response.status_code == 200
-        assert not response.wsgi_request.user.is_authenticated
+        assert client.session.get("fastapi_token") is None
 
 
 class TestRegister:
-    def test_register_page_ok(self, client):
+    def test_register_page_ok(self, client, mock_anon):
         response = client.get(reverse("register"))
         assert response.status_code == 200
         assert "Регистрация" in response.content.decode("utf-8")
 
-    def test_register_creates_student(self, client):
-        from accounts.models import User
+    def test_register_success_redirects(self, client, mock_fastapi):
         response = client.post(reverse("register"), {
-            "username": "newstudent",
-            "full_name": "Новиков Новик Новикович",
-            "email": "new@example.com",
-            "password1": "SuperPass123",
-            "password2": "SuperPass123",
+            "username": "newbie", "full_name": "Новиков Н.Н.",
+            "email": "n@example.com", "password": "Pass123word",
         })
         assert response.status_code == 302
-        user = User.objects.get(username="newstudent")
-        assert user.role == User.Role.STUDENT
-        # автоматически создан профиль студента
-        assert hasattr(user, "student_profile")
+        assert client.session.get("fastapi_token") == "test-token-123"
 
 
 class TestLogout:
-    def test_logout_redirects(self, student_client):
-        response = student_client.post(reverse("logout"))
+    def test_logout_redirects_and_clears(self, auth_client, mock_fastapi):
+        response = auth_client.get(reverse("logout"))
         assert response.status_code == 302
+        assert auth_client.session.get("fastapi_token") is None

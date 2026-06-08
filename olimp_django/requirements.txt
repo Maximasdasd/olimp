@@ -1,5 +1,5 @@
 Django>=4.2,<5.1
-Pillow>=10.0.0
+requests>=2.31
 
 # Тесты
 pytest>=7.4

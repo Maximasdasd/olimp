@@ -1,0 +1,16 @@
+{% extends "core/base.html" %}
+{% block title %}Создание протокола{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px; margin:auto;">
+    <h1>Создание протокола</h1>
+    <form method="post">{% csrf_token %}
+        <p><label>Олимпиада</label>
+            <select name="olympiad_id" required>
+                {% for o in olympiads %}<option value="{{ o.id }}">{{ o.title }} ({{ o.year }})</option>{% endfor %}
+            </select>
+        </p>
+        <button class="btn" type="submit">Создать</button>
+        <a href="{% url 'teacher_dashboard' %}" class="btn secondary">Назад</a>
+    </form>
+</div>
+{% endblock %}

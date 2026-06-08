@@ -36,6 +36,14 @@ def get_published_protocol(db: Session, olympiad_id: int) -> Protocol:
     return protocol
 
 
+def get_published_results(db: Session, olympiad_id: int):
+    """Результаты (победители) из опубликованного протокола олимпиады."""
+    protocol = get_published_protocol(db, olympiad_id)
+    return db.query(ProtocolResult).filter(
+        ProtocolResult.protocol_id == protocol.id
+    ).order_by(ProtocolResult.place).all()
+
+
 def get_protocol(db: Session, protocol_id: int) -> Protocol:
     """Получить протокол по id или вернуть 404."""
     protocol = db.query(Protocol).filter(Protocol.id == protocol_id).first()

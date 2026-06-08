@@ -1,31 +1,22 @@
 """
-conftest.py — фикстуры для тестов Django-приложения «Олимпиадное движение».
+conftest.py — фикстуры для тестов Django-фронтенда «Олимпиадное движение».
 
-В отличие от проекта AutoFleet (где Django проксирует запросы в FastAPI),
-здесь Django — самостоятельное приложение со своей моделью пользователя,
-ролями и входом по логину/паролю через стандартный механизм Django.
+Архитектура проекта:
+  * Django — фронтенд, данные и аутентификация берутся из FastAPI-бэкенда;
+  * пользователь логинится через /login/ -> Django шлёт логин/пароль в FastAPI;
+  * FastAPI возвращает JWT, Django кладёт его в сессию (request.session['fastapi_token']);
+  * все страницы тянут данные из FastAPI через requests.* с этим токеном.
 
-Поэтому используются обычные фикстуры:
-  * пользователи создаются через User.objects.create_user;
-  * вход выполняется через client.login(username, password);
-  * фикстуры отдают готовые «залогиненные» клиенты для каждой роли
-    (студент, преподаватель, администратор).
+Поэтому НЕ используются User.objects.create_user / client.login(). Вместо этого:
+  * фикстура `auth_client` кладёт токен прямо в сессию;
+  * фикстура `mock_fastapi` подменяет requests.* в core.fastapi_client, чтобы
+    тесты не ходили в реальный FastAPI.
 """
-import datetime
-
 import pytest
 from django.test import Client
 
 
-# --- Ускорение тестов ----------------------------------------------------
-# Быстрый хешер паролей вместо bcrypt — заметно ускоряет создание пользователей.
-@pytest.fixture(autouse=True)
-def _fast_password_hasher(settings):
-    settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
-
-
 # --- ALLOWED_HOSTS -------------------------------------------------------
-# Django test client ходит с хоста 'testserver'. Разрешаем его на время тестов.
 @pytest.fixture(autouse=True)
 def _allow_testserver(settings):
     settings.ALLOWED_HOSTS = ["testserver", "localhost", "127.0.0.1"]
@@ -34,107 +25,129 @@ def _allow_testserver(settings):
 # --- Клиенты -------------------------------------------------------------
 @pytest.fixture
 def client():
-    """Анонимный Django test client (незарегистрированный пользователь)."""
+    """Анонимный Django test client (без токена FastAPI в сессии)."""
     return Client()
 
 
-# --- Пользователи по ролям ----------------------------------------------
-@pytest.fixture
-def admin_user(db):
-    """Администратор."""
-    from accounts.models import User
-    return User.objects.create_user(
-        username="admin", password="admin123",
-        role=User.Role.ADMIN, full_name="Администратор Системы",
-        email="admin@example.com", is_staff=True, is_superuser=True,
-    )
-
-
-@pytest.fixture
-def teacher_user(db):
-    """Преподаватель с профилем."""
-    from accounts.models import User, TeacherProfile
-    user = User.objects.create_user(
-        username="teacher", password="teacher123",
-        role=User.Role.TEACHER, full_name="Иванов Иван Иванович",
-        email="teacher@example.com",
-    )
-    TeacherProfile.objects.create(user=user, department="Информатика", position="Доцент")
-    return user
-
-
-@pytest.fixture
-def student_user(db):
-    """Студент с профилем."""
-    from accounts.models import User, StudentProfile
-    user = User.objects.create_user(
-        username="student", password="student123",
-        role=User.Role.STUDENT, full_name="Петров Пётр Петрович",
-        email="student@example.com",
-    )
-    StudentProfile.objects.create(
-        user=user, institution="ЕМК", education_level="СПО",
-        course=3, specialty="Информационные системы",
-    )
-    return user
-
-
-@pytest.fixture
-def admin_client(client, admin_user):
-    """Клиент, залогиненный под администратором."""
-    client.login(username="admin", password="admin123")
+def _make_auth_client(role, username):
+    client = Client()
+    session = client.session
+    session["fastapi_token"] = "test-token-123"
+    session["user_info"] = {"id": 1, "username": username, "role": role}
+    session.save()
     return client
 
 
 @pytest.fixture
-def teacher_client(client, teacher_user):
-    """Клиент, залогиненный под преподавателем."""
-    client.login(username="teacher", password="teacher123")
-    return client
+def auth_client():
+    """Клиент с «залогиненным» пользователем (роль студента по умолчанию)."""
+    return _make_auth_client("student", "student")
 
 
 @pytest.fixture
-def student_client(client, student_user):
-    """Клиент, залогиненный под студентом."""
-    client.login(username="student", password="student123")
-    return client
-
-
-# --- Данные предметной области ------------------------------------------
-@pytest.fixture
-def olympiad(db, teacher_user):
-    """Олимпиада с ответственным преподавателем."""
-    from olympiads.models import Olympiad
-    return Olympiad.objects.create(
-        title="Олимпиада по программированию",
-        description="Командная олимпиада по алгоритмам.",
-        year=2025, level="Региональная",
-        start_date=datetime.date(2025, 3, 1),
-        end_date=datetime.date(2025, 3, 2),
-        responsible_teacher=teacher_user,
-    )
+def student_client():
+    return _make_auth_client("student", "student")
 
 
 @pytest.fixture
-def published_protocol(db, olympiad, teacher_user, student_user):
-    """Опубликованный протокол с результатом студента."""
-    from olympiads.models import Protocol, Result
-    protocol = Protocol.objects.create(
-        olympiad=olympiad, teacher=teacher_user,
-        status=Protocol.Status.PUBLISHED,
-    )
-    Result.objects.create(
-        protocol=protocol, student=student_user,
-        score=95, place=1, result_type=Result.ResultType.WINNER,
-    )
-    return protocol
+def teacher_client():
+    return _make_auth_client("teacher", "teacher")
 
 
 @pytest.fixture
-def draft_protocol(db, olympiad, teacher_user):
-    """Протокол в статусе «формируется»."""
-    from olympiads.models import Protocol
-    return Protocol.objects.create(
-        olympiad=olympiad, teacher=teacher_user,
-        status=Protocol.Status.DRAFT,
-    )
+def admin_client():
+    return _make_auth_client("admin", "admin")
+
+
+# --- Мок ответов FastAPI -------------------------------------------------
+class FakeResponse:
+    """Имитация requests.Response."""
+    def __init__(self, json_data=None, status_code=200):
+        self._json = json_data if json_data is not None else {}
+        self.status_code = status_code
+        self.ok = status_code < 400
+        self.text = str(self._json)
+
+    def json(self):
+        return self._json
+
+
+@pytest.fixture
+def mock_fastapi(monkeypatch):
+    """
+    Подменяет HTTP-вызовы к FastAPI в core.fastapi_client на заглушки.
+
+    По умолчанию:
+      * GET возвращает 200 и пустой список (страницы-списки не падают);
+      * /api/auth/me возвращает залогиненного пользователя (роль настраивается);
+      * POST/PUT возвращают 200.
+    Тест может донастроить поведение через возвращаемый объект-контроллер.
+    """
+    import core.fastapi_client as fc
+
+    state = {
+        "me": {"id": 1, "username": "user", "role": "student"},
+        "get_default": FakeResponse([], 200),
+        "get_map": {},   # path -> FakeResponse
+        "post": FakeResponse({"detail": "ok"}, 200),
+        "put": FakeResponse({"detail": "ok"}, 200),
+    }
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        # /api/auth/me -> текущий пользователь
+        if url.endswith("/api/auth/me"):
+            return FakeResponse(state["me"], 200)
+        for path, resp in state["get_map"].items():
+            if url.endswith(path):
+                return resp
+        return state["get_default"]
+
+    def fake_post(url, headers=None, json=None, data=None, timeout=None):
+        # логин и регистрация: вернуть токен
+        if url.endswith("/api/auth/login") or url.endswith("/api/auth/register"):
+            return FakeResponse({
+                "access_token": "test-token-123", "token_type": "bearer",
+                "user_id": 1, "username": "user", "role": state["me"]["role"],
+            }, 200)
+        return state["post"]
+
+    def fake_put(url, headers=None, json=None, timeout=None):
+        return state["put"]
+
+    monkeypatch.setattr(fc.requests, "get", fake_get)
+    monkeypatch.setattr(fc.requests, "post", fake_post)
+    monkeypatch.setattr(fc.requests, "put", fake_put)
+
+    class Controller:
+        Response = FakeResponse
+
+        def set_role(self, role):
+            state["me"]["role"] = role
+
+        def set_get(self, path, json_data, status=200):
+            state["get_map"][path] = FakeResponse(json_data, status)
+
+        def set_get_default(self, json_data, status=200):
+            state["get_default"] = FakeResponse(json_data, status)
+
+        def set_post(self, json_data, status=200):
+            state["post"] = FakeResponse(json_data, status)
+
+        def set_put(self, json_data, status=200):
+            state["put"] = FakeResponse(json_data, status)
+
+    return Controller()
+
+
+@pytest.fixture
+def mock_anon(monkeypatch):
+    """Мок без авторизации: /api/auth/me всегда возвращает 401."""
+    import core.fastapi_client as fc
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        if url.endswith("/api/auth/me"):
+            return FakeResponse({"detail": "unauth"}, 401)
+        return FakeResponse([], 200)
+
+    monkeypatch.setattr(fc.requests, "get", fake_get)
+    return True

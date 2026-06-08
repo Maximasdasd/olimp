@@ -31,25 +31,51 @@
 
 Роли: `admin`, `teacher`, `student`.
 
+## База данных — PostgreSQL
+
+Основное хранилище проекта — **PostgreSQL** (общая БД для всей системы;
+Django-фронтенд `../olimp_django` ходит за данными в этот бэкенд).
+
+Создание БД:
+
+```bash
+sudo -u postgres psql -c "CREATE DATABASE olimpiad;"
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'root';"
+```
+
+Скопируйте `.env.example` в `.env` и при необходимости поправьте параметры:
+
+```
+DATABASE_URL=postgresql://postgres:root@localhost:5432/olimpiad
+SECRET_KEY=super-secret-key-change-me
+```
+
+> Если `DATABASE_URL` не задан, используется SQLite (`olimp.db`) —
+> удобно для быстрых запусков и тестов.
+
 ## Запуск
 
 ```bash
 pip install -r requirements.txt
+# переменные окружения берутся из .env
 uvicorn app.main:app --reload
 ```
 
-По умолчанию используется SQLite (файл `olimp.db`) — настройка БД не требуется.
-Для PostgreSQL задайте переменные окружения (можно через файл `.env`):
-
-```
-DATABASE_URL=postgresql://user:password@localhost/olimpiad
-SECRET_KEY=your-secret-key
-```
-
 Документация API: http://127.0.0.1:8000/docs
+
+### Демонстрационные данные
+
+```bash
+python -m scripts.seed_data
+```
+
+Создаёт учётки `admin/admin123`, `teacher/teacher123`, `student/student123`,
+пару олимпиад и опубликованный протокол.
 
 ## Тесты
 
 ```bash
 pytest
 ```
+
+Тесты используют отдельную SQLite-БД в памяти и не затрагивают PostgreSQL.

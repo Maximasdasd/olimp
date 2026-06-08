@@ -5,6 +5,6 @@ __pycache__/
 *.pyc
 *.env
 .env
-db.sqlite3
-media/
+*.sqlite3
+django_sessions.sqlite3
 /staticfiles/

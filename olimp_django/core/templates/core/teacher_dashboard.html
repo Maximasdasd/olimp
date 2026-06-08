@@ -1,0 +1,55 @@
+{% extends "core/base.html" %}
+{% block title %}Кабинет преподавателя{% endblock %}
+{% block content %}
+<div class="card">
+    <h1>Кабинет преподавателя</h1>
+    <p>
+        <a href="{% url 'create_student' %}" class="btn">+ Создать студента</a>
+        <a href="{% url 'create_protocol' %}" class="btn">+ Создать протокол</a>
+    </p>
+</div>
+
+<div class="card">
+    <h2>Протоколы</h2>
+    {% if protocols %}
+        <table>
+            <thead><tr><th>ID</th><th>Олимпиада (ID)</th><th>Статус</th><th>Действия</th></tr></thead>
+            <tbody>
+            {% for p in protocols %}
+                <tr>
+                    <td>{{ p.id }}</td>
+                    <td>{{ p.olympiad_id }}</td>
+                    <td><span class="badge {{ p.status }}">{{ p.status }}</span></td>
+                    <td>
+                        {% if p.status == 'draft' %}
+                            <form method="post" action="{% url 'set_protocol_prepared' p.id %}" style="display:inline">{% csrf_token %}<button class="btn small success" type="submit">Подготовить</button></form>
+                        {% endif %}
+                        {% if p.status == 'prepared' %}
+                            <form method="post" action="{% url 'recall_protocol' p.id %}" style="display:inline">{% csrf_token %}<button class="btn small danger" type="submit">Отозвать</button></form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}<p class="muted">Протоколов пока нет.</p>{% endif %}
+</div>
+
+<div class="card">
+    <h2>Добавить результат в протокол</h2>
+    <form method="post" action="#" onsubmit="this.action='/teacher/protocol/'+document.getElementById('pid').value+'/results/';">{% csrf_token %}
+        <p><label>ID протокола</label><input id="pid" name="_pid_display" type="number" required></p>
+        <p><label>ID студента</label><input name="student_id" type="number" required></p>
+        <p><label>Баллы</label><input name="score" type="number" step="0.1" required></p>
+        <p><label>Место</label><input name="place" type="number"></p>
+        <p><label>Результат</label>
+            <select name="result_type">
+                <option value="winner">Победитель</option>
+                <option value="prize_winner">Призёр</option>
+                <option value="participant" selected>Участник</option>
+            </select>
+        </p>
+        <button class="btn" type="submit">Добавить</button>
+    </form>
+</div>
+{% endblock %}

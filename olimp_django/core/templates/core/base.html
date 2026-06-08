@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Олимпиадное движение{% endblock %}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f4f6f9; color: #222; }
+        header { background: #1f3a93; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+        header a { color: #fff; text-decoration: none; }
+        header .brand { font-weight: 700; font-size: 18px; }
+        nav { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+        nav a:hover { text-decoration: underline; }
+        .spacer { margin-left: auto; }
+        .container { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+        .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; }
+        h1 { font-size: 24px; } h2 { font-size: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
+        th { background: #f0f3fa; }
+        .btn { display: inline-block; background: #1f3a93; color: #fff !important; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .btn.secondary { background: #6c757d; }
+        .btn.success { background: #1e7e34; }
+        .btn.danger { background: #b02a37; }
+        .btn.small { padding: 4px 10px; font-size: 13px; }
+        form p { margin: 10px 0; }
+        label { font-weight: 600; display: block; margin-bottom: 4px; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        .messages { list-style: none; padding: 0; }
+        .messages li { padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; }
+        .messages .success { background: #d4edda; color: #155724; }
+        .messages .info { background: #d1ecf1; color: #0c5460; }
+        .messages .error { background: #f8d7da; color: #721c24; }
+        .badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        .badge.draft { background: #e2e3e5; }
+        .badge.prepared { background: #fff3cd; }
+        .badge.published { background: #d4edda; }
+        .muted { color: #777; font-size: 14px; }
+    </style>
+</head>
+<body>
+<header>
+    <a href="{% url 'olympiad_list' %}" class="brand">🏆 Олимпиадное движение</a>
+    <nav>
+        <a href="{% url 'olympiad_list' %}">Олимпиады</a>
+        {% if is_student %}<a href="{% url 'profile' %}">Мой профиль</a>{% endif %}
+        {% if is_teacher %}<a href="{% url 'teacher_dashboard' %}">Кабинет преподавателя</a>{% endif %}
+        {% if is_admin %}<a href="{% url 'admin_dashboard' %}">Управление</a>{% endif %}
+    </nav>
+    <div class="spacer"></div>
+    <nav>
+        {% if is_authenticated %}
+            <span>{{ current_user.username }} ({{ current_user.role }})</span>
+            <a href="{% url 'logout' %}" class="btn small secondary">Выйти</a>
+        {% else %}
+            <a href="{% url 'login' %}">Войти</a>
+            <a href="{% url 'register' %}">Регистрация</a>
+        {% endif %}
+    </nav>
+</header>
+<div class="container">
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}
+        </ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+</div>
+</body>
+</html>

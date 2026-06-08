@@ -1,0 +1,17 @@
+{% extends "core/base.html" %}
+{% block title %}Создание преподавателя{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px; margin:auto;">
+    <h1>Создание учётной записи преподавателя</h1>
+    <form method="post">{% csrf_token %}
+        <p><label>Имя пользователя</label><input name="username" required></p>
+        <p><label>ФИО</label><input name="full_name" required></p>
+        <p><label>Электронная почта</label><input name="email" type="email" required></p>
+        <p><label>Пароль</label><input name="password" type="password" required></p>
+        <p><label>Кафедра/отделение</label><input name="department"></p>
+        <p><label>Должность</label><input name="position"></p>
+        <button class="btn" type="submit">Создать</button>
+        <a href="{% url 'admin_dashboard' %}" class="btn secondary">Отмена</a>
+    </form>
+</div>
+{% endblock %}

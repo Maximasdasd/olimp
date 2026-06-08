@@ -6,12 +6,10 @@ E2E-тесты через Selenium (опционально).
 
 Они требуют:
   * установленного Selenium и webdriver-manager;
-  * установленного Chrome/Chromium и chromedriver (webdriver-manager скачает);
-  * pytest-django c фикстурой live_server (поднимает реальный сервер на время теста).
-
-В отличие от проекта AutoFleet, здесь вход НЕ зависит от внешнего FastAPI —
-Django самодостаточен, поэтому полноценный E2E-логин работает без бэкенда:
-достаточно создать пользователя в тестовой БД.
+  * установленного Chrome/Chromium и chromedriver;
+  * запущенного FastAPI-бэкенда на 127.0.0.1:8000 с данными (иначе вход не
+    пройдёт — аутентификация идёт через FastAPI);
+  * live_server из pytest-django (поднимает Django на время теста).
 
 Запуск только этих тестов:
     pytest tests/test_selenium.py -m selenium
@@ -46,9 +44,8 @@ def driver():
 
 
 @pytest.mark.selenium
-@pytest.mark.django_db
 class TestSeleniumE2E:
-    """Базовые E2E-сценарии. Требуют live_server."""
+    """Базовые E2E-сценарии. Требуют live_server + запущенный FastAPI."""
 
     def test_olympiad_list_page_loads(self, driver, live_server):
         driver.get(f"{live_server.url}/")
@@ -61,22 +58,17 @@ class TestSeleniumE2E:
         assert username.is_displayed()
         assert password.is_displayed()
 
-    def test_login_as_student(self, driver, live_server, django_user_model):
+    def test_login_as_admin(self, driver, live_server):
         """
-        Полноценный вход студента. Django самодостаточен, поэтому
-        достаточно создать пользователя в тестовой БД.
+        Полноценный вход администратора. Требует запущенного FastAPI с
+        пользователем admin/admin123 (см. scripts/seed_data.py в olimp_api).
         """
-        django_user_model.objects.create_user(
-            username="seleniumuser", password="selenium123",
-            role="student", full_name="Селениум Тестовый",
-        )
         driver.get(f"{live_server.url}/login/")
-        driver.find_element(By.NAME, "username").send_keys("seleniumuser")
-        driver.find_element(By.NAME, "password").send_keys("selenium123")
+        driver.find_element(By.NAME, "username").send_keys("admin")
+        driver.find_element(By.NAME, "password").send_keys("admin123")
         driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
-        # после входа в шапке появляется ссылка на профиль / имя пользователя
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.LINK_TEXT, "Мой профиль"))
+            EC.presence_of_element_located((By.LINK_TEXT, "Управление"))
         )
-        assert "Мой профиль" in driver.page_source
+        assert "Управление" in driver.page_source

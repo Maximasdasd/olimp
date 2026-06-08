@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block title %}Олимпиады{% endblock %}
+{% block content %}
+<div class="card">
+    <h1>Олимпиады и конкурсы</h1>
+    <form method="get" style="display:flex; gap:10px; align-items:end; max-width:400px;">
+        <div style="flex:1">
+            <label>Фильтр по году</label>
+            <select name="year" onchange="this.form.submit()">
+                <option value="">Все годы</option>
+                {% for y in years %}
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <a href="{% url 'olympiad_list' %}" class="btn secondary">Сбросить</a>
+    </form>
+</div>
+
+<div class="card">
+    {% if olympiads %}
+    <table>
+        <thead><tr><th>Название</th><th>Год</th><th>Уровень</th><th>Протокол</th><th></th></tr></thead>
+        <tbody>
+        {% for o in olympiads %}
+            <tr>
+                <td>{{ o.title }}</td>
+                <td>{{ o.year }}</td>
+                <td>{{ o.level|default:"—" }}</td>
+                <td>{% if o.is_protocol_published %}<span class="badge published">опубликован</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td><a href="{% url 'olympiad_detail' o.id %}" class="btn small">Подробнее</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}<p class="muted">Олимпиады не найдены.</p>{% endif %}
+</div>
+{% endblock %}

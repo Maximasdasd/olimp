@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+{% block title %}{{ olympiad.title }}{% endblock %}
+{% block content %}
+<div class="card">
+    <h1>{{ olympiad.title }} <span class="muted">({{ olympiad.year }})</span></h1>
+    {% if olympiad.description %}<p>{{ olympiad.description }}</p>{% endif %}
+    <table>
+        <tr><th>Уровень</th><td>{{ olympiad.level|default:"—" }}</td></tr>
+        <tr><th>Место проведения</th><td>{{ olympiad.location|default:"—" }}</td></tr>
+        <tr><th>Даты</th><td>{{ olympiad.start_date|default:"—" }} — {{ olympiad.end_date|default:"—" }}</td></tr>
+    </table>
+
+    {% if is_student %}
+        <form method="post" action="{% url 'register_for_olympiad' olympiad.id %}" style="margin-top:12px;">{% csrf_token %}
+            <button class="btn success" type="submit">Записаться на олимпиаду</button>
+        </form>
+    {% elif not is_authenticated %}
+        <p class="muted"><a href="{% url 'login' %}">Войдите</a>, чтобы записаться на олимпиаду.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Протокол победителей</h2>
+    {% if results %}
+        <table>
+            <thead><tr><th>Место</th><th>Студент (ID)</th><th>Баллы</th><th>Результат</th></tr></thead>
+            <tbody>
+            {% for r in results %}
+                <tr><td>{{ r.place|default:"—" }}</td><td>{{ r.student_id }}</td><td>{{ r.score }}</td><td>{{ r.result_type }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}<p class="muted">Протокол ещё не опубликован.</p>{% endif %}
+</div>
+{% endblock %}
